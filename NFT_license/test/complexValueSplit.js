@@ -1,4 +1,5 @@
 const {ethers} = require("hardhat")
+const {BigNumber} = require("ethers")
 
 const {
     time,
@@ -57,6 +58,7 @@ describe("complex value splitter", function () {
 
             const des = await license.getAllDescendants(1);
             console.log(des);
+            expect(des).to.deep.equal([BigNumber.from(8),BigNumber.from(5),BigNumber.from(7)])
         })
     })
 })

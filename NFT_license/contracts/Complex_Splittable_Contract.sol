@@ -104,11 +104,30 @@ contract Complex_Splittable_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
         for(uint256 i = 0; i < childrenIds.length; i++) {
             uint256[] memory grandchildren = getAllDescendants(childrenIds[i]);
             for(uint256 j = 0; j < grandchildren.length; j++) {
-                descendants[index] = grandchildren[j];
-                index++;
+                if(!contains(descendants, grandchildren[j])){
+                    descendants[index] = grandchildren[j];
+                    index++;
+                }else{
+                    continue;
+                }
             }
         }
-        return descendants;
+        uint reallength;
+        for(uint i =0; i<totalLength; i++){
+            if(descendants[i]!=0){
+                reallength++;
+            }
+        }
+        uint256[] memory realDescendants = new uint256[](reallength);
+        uint256 realIndex = 0;
+        for(uint i =0; i<totalLength; i++){
+            if(descendants[i]==0){
+                continue;
+            }
+            realDescendants[realIndex] = descendants[i];
+            realIndex++;
+        }
+        return realDescendants;
     }
 
     function findAncestor(uint256 tokenId) internal view returns(uint256){
