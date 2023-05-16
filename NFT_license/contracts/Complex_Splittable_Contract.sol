@@ -212,22 +212,13 @@ contract Complex_Splittable_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
 
         _tokenIds.increment();
         uint256 newtokenid = _tokenIds.current();
-        // forming a new parent set
+        _mint(msg.sender, newtokenid);
+        // forming a new parent set and set share value
         for(uint256 i = 0; i < idlist.length; i++){
             childTokens[idlist[i]] = [newtokenid];
-            uint256[] memory parent = parentTokens[idlist[i]];
-            for(uint256 j = 0; j < parent.length; j++){
-                if(!contains(parentTokens[newtokenid], parent[j])){
-                    parentTokens[idlist[i]].push(parent[j]);
-                }
-            }
-        }
-        //set share value
-        for(uint256 i = 0; i< idlist.length; i++){
-            uint256[] memory parent = parentTokens[idlist[i]];
-            for(uint256 j = 0; j < parent.length; j++){
-                shareOfChild[newtokenid][parent[j]] = shareOfChild[newtokenid][parent[j]] + shareOfChild[idlist[i]][parent[j]];
-            }
+            parentTokens[newtokenid].push(idlist[i]);
+            totalShareValue[idlist[i]] = 1;
+            shareOfChild[newtokenid][idlist[i]] = totalShareValue[idlist[i]];
         }
     }
 
@@ -240,6 +231,10 @@ contract Complex_Splittable_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
     function getParentList(uint256 tokenId) external view returns(uint256[] memory){
         require(_exists(tokenId), "Token does not exist");
         return parentTokens[tokenId];
+    }
+    function getTotalValue(uint256 tokenId) external view returns(uint256){
+        require(_exists(tokenId), "Token does not exist");
+        return totalShareValue[tokenId];
     }
     function getChildrenList(uint256 tokenId) external view returns(uint256[] memory){
         require(_exists(tokenId), "Token does not exist");
