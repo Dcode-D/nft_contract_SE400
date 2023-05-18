@@ -76,12 +76,25 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
         return false;
     }
 
+    function containsString(string[] memory arr, string memory elem) pure internal returns(bool){
+        for(uint i=0; i<arr.length; i++){
+            if(keccak256(abi.encodePacked(arr[i])) == keccak256(abi.encodePacked(elem))){
+                return true;
+            }
+        }
+        return false;
+    }
+
     //mapping tokens to their attributes
     mapping (uint256 => Attribute[]) public tokenAttributes;
     //mapping original to stored parts
     mapping (uint256 => uint256[]) public storedParts;
     //mapping represent attributes to parent
     mapping (uint256 => mapping(uint256 => Attribute)) parentToRepresentAttribute;
+    //set type to token
+    mapping (uint256 => string) tokenType;
+    //set token to accept types to be merged in
+    mapping (uint256 => string[]) acceptTypes;
     //Token ids counter
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
@@ -90,7 +103,7 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
 
     //main functions
 
-    function mint(address to, string memory tokenURI, string[] memory attributes, string[] memory values) external onlyOwner{
+    function mint(address to, string memory tokenURI, string[] memory attributes, string[] memory values,string memory tokentype, string[] memory accepttypes, string[] memory attrTypes, string[][] memory attrAcceptTypes) external onlyOwner{
         require(attributes.length == values.length, "Attributes and values must have the same length");
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
@@ -99,6 +112,10 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
         for(uint256 i = 0; i < attributes.length; i++){
             tokenAttributes[newTokenId].push(Attribute(attributes[i], values[i]));
         }
+        tokenType[newTokenId] = tokentype;
+        for(uint256 i = 0; i < accepttypes.length; i++){
+            acceptTypes[newTokenId].push(accepttypes[i]);
+        }
     }
 
     function addTrait(uint256 traitToken,uint256 addto, string memory repname, string memory repvalue) external{
@@ -106,7 +123,7 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
         require(_exists(addto), "Token does not exist");
         require(ownerOf(traitToken) == msg.sender);
         require(ownerOf(addto) == msg.sender);
-        require(keccak256(abi.encodePacked(tokenURI(traitToken))) == keccak256(abi.encodePacked(tokenURI(addto))),"Tokens must have the same tokenURI");
+        require(containsString(acceptTypes[addto],tokenType[traitToken]),"Tokens type must be in accept types of addto token");
         require(tokenAttributes[traitToken].length > 0, "Trait token must have attributes");
         if(tokenAttributes[traitToken].length == 1){
             tokenAttributes[addto].push(tokenAttributes[traitToken][0]);
@@ -119,6 +136,28 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
             storedParts[addto].push(traitToken);
             parentToRepresentAttribute[addto][traitToken] = Attribute(repname, repvalue);
             safeTransferFrom(msg.sender, address(this), traitToken);
+        }
+    }
+
+    function removeTraitAt(uint256 token, uint256 position) external{
+        require(_exists(token), "Token does not exist");
+        require(ownerOf(token) == msg.sender);
+        require(position < tokenAttributes[token].length, "Position not valid");
+        uint256[] memory parts = storedParts[token];
+        Attribute memory attribute = tokenAttributes[token][position];
+        for(uint i=0;i<parts.length;i++){
+            Attribute memory tokenAttribute = parentToRepresentAttribute[token][parts[i]];
+            if(keccak256(abi.encodePacked(tokenAttribute.name)) == keccak256(abi.encodePacked(attribute.name)) && keccak256(abi.encodePacked(tokenAttribute.value)) == keccak256(abi.encodePacked(attribute.value))){
+                _transfer(address(this), msg.sender, parts[i]);
+                tokenAttributes[token][position] = tokenAttributes[token][tokenAttributes[token].length - 1];
+                tokenAttributes[token].pop();
+                storedParts[token][i] = storedParts[token][storedParts[token].length - 1];
+                storedParts[token].pop();
+                delete parentToRepresentAttribute[token][parts[i]];
+                return;
+            }else{
+                continue;
+            }
         }
     }
 
