@@ -87,5 +87,17 @@ describe("complex value splitter", function () {
             await license.connect(owner).merge([5,6]);
             expect(await license.ownerOf(1)).to.equal(owner.address);
         })
+        it("Should split and then calculate percentages", async function () {
+            const {license, owner} = await loadFixture(deployContract);
+            await license.mint(owner.address, "https://ipfs.io/");
+            await license.connect(owner).split(1,[1,1]);
+            await license.connect(owner).split(2,[1,1]);
+            await license.connect(owner).split(3,[1,1]);
+            await license.connect(owner).mergePercentage([4,5,6]);
+            expect(await calculatePercent(license,8)).to.equal(0.75);
+            console.log(await license.getAllDescendants(1));
+            await license.connect(owner).merge([8,7]);
+            expect(await license.ownerOf(1)).to.equal(owner.address);
+        })
     })
 })

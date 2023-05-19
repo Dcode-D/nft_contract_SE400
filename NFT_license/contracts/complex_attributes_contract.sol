@@ -85,16 +85,21 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
         return false;
     }
 
-    //mapping tokens to their attributes
-    mapping (uint256 => Attribute[]) public tokenAttributes;
+    function containAttributes(Attribute[] memory arr, Attribute memory elem) pure internal returns(bool){
+        for(uint i=0; i<arr.length; i++){
+            if(keccak256(abi.encodePacked(arr[i].name)) == keccak256(abi.encodePacked(elem.name))){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //mapping tokens to their major attributes
+    mapping (uint256 => Attribute) public tokenMajorAttribute;
     //mapping original to stored parts
     mapping (uint256 => uint256[]) public storedParts;
-    //mapping represent attributes to parent
-    mapping (uint256 => mapping(uint256 => Attribute)) parentToRepresentAttribute;
-    //set type to token
-    mapping (uint256 => string) tokenType;
     //set token to accept types to be merged in
-    mapping (uint256 => string[]) acceptTypes;
+    mapping (uint256 => Attribute[]) acceptMajorAttributes;
     //Token ids counter
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
@@ -103,69 +108,61 @@ contract Complex_Attributes_Contract is ERC721URIStorage,IERC721Receiver, Ownabl
 
     //main functions
 
-    function mint(address to, string memory tokenURI, string[] memory attributes, string[] memory values,string memory tokentype, string[] memory accepttypes, string[] memory attrTypes, string[][] memory attrAcceptTypes) external onlyOwner{
+    function mint(address to, string memory tokenURI, string memory majorName, string memory majorValue,
+        string[] memory acceptNames, string[] memory acceptValues,
+        string[] memory attributes, string[] memory values, string[] memory attrURI,
+        string[][] memory acceptAttrNames, string[][] memory acceptAttrValue) external onlyOwner{
         require(attributes.length == values.length, "Attributes and values must have the same length");
+        require(attributes.length == attrURI.length, "Attributes and URI must have the same length");
+        require(acceptNames.length == acceptValues.length, "Accept names and values must have the same length");
+        require(acceptAttrNames.length == attributes.length,"Each attributes must have a list of accept attributes");
+        //handle new token
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
         _mint(to, newTokenId);
         _setTokenURI(newTokenId, tokenURI);
-        for(uint256 i = 0; i < attributes.length; i++){
-            tokenAttributes[newTokenId].push(Attribute(attributes[i], values[i]));
+        tokenMajorAttribute[newTokenId] = Attribute(majorName, majorValue);
+        for(uint256 i = 0; i < acceptNames.length; i++){
+            acceptMajorAttributes[newTokenId].push(Attribute(acceptNames[i], acceptValues[i]));
         }
-        tokenType[newTokenId] = tokentype;
-        for(uint256 i = 0; i < accepttypes.length; i++){
-            acceptTypes[newTokenId].push(accepttypes[i]);
+        //handle attributes that go along with the token
+        for(uint256 i = 0; i < attributes.length; i++){
+            _tokenIds.increment();
+            _mint(address(this), _tokenIds.current());
+            _setTokenURI(_tokenIds.current(), attrURI[i]);
+            tokenMajorAttribute[_tokenIds.current()] = Attribute(attributes[i], values[i]);
+            for(uint256 j = 0; j < acceptAttrNames[i].length; j++){
+                acceptMajorAttributes[_tokenIds.current()].push(Attribute(acceptAttrNames[j][i], acceptAttrValue[j][i]));
+            }
+            storedParts[newTokenId].push(_tokenIds.current());
         }
     }
 
-    function addTrait(uint256 traitToken,uint256 addto, string memory repname, string memory repvalue) external{
+    function addTrait(uint256 traitToken,uint256 addto) external{
         require(_exists(traitToken), "Token does not exist");
         require(_exists(addto), "Token does not exist");
-        require(ownerOf(traitToken) == msg.sender);
+        require(ownerOf(traitToken) == msg.sender, "Sender must be owner of trait token");
         require(ownerOf(addto) == msg.sender);
-        require(containsString(acceptTypes[addto],tokenType[traitToken]),"Tokens type must be in accept types of addto token");
-        require(tokenAttributes[traitToken].length > 0, "Trait token must have attributes");
-        if(tokenAttributes[traitToken].length == 1){
-            tokenAttributes[addto].push(tokenAttributes[traitToken][0]);
-            storedParts[addto].push(traitToken);
-            parentToRepresentAttribute[addto][traitToken] = tokenAttributes[traitToken][0];
-            safeTransferFrom(msg.sender, address(this), traitToken);
-        }else{
-            require(keccak256(abi.encodePacked(repname)) != keccak256(abi.encodePacked("")) && keccak256(abi.encodePacked(repvalue)) != keccak256(abi.encodePacked("")), "Represent attribute must have a name and a value");
-            tokenAttributes[addto].push(Attribute(repname, repvalue));
-            storedParts[addto].push(traitToken);
-            parentToRepresentAttribute[addto][traitToken] = Attribute(repname, repvalue);
-            safeTransferFrom(msg.sender, address(this), traitToken);
-        }
+        require(containAttributes(acceptMajorAttributes[addto],tokenMajorAttribute[traitToken]),"Tokens type must be in accept types of addto token");
+        storedParts[addto].push(traitToken);
+        safeTransferFrom(msg.sender, address(this), traitToken);
     }
 
     function removeTraitAt(uint256 token, uint256 position) external{
         require(_exists(token), "Token does not exist");
         require(ownerOf(token) == msg.sender);
-        require(position < tokenAttributes[token].length, "Position not valid");
-        uint256[] memory parts = storedParts[token];
-        Attribute memory attribute = tokenAttributes[token][position];
-        for(uint i=0;i<parts.length;i++){
-            Attribute memory tokenAttribute = parentToRepresentAttribute[token][parts[i]];
-            if(keccak256(abi.encodePacked(tokenAttribute.name)) == keccak256(abi.encodePacked(attribute.name)) && keccak256(abi.encodePacked(tokenAttribute.value)) == keccak256(abi.encodePacked(attribute.value))){
-                _transfer(address(this), msg.sender, parts[i]);
-                tokenAttributes[token][position] = tokenAttributes[token][tokenAttributes[token].length - 1];
-                tokenAttributes[token].pop();
-                storedParts[token][i] = storedParts[token][storedParts[token].length - 1];
-                storedParts[token].pop();
-                delete parentToRepresentAttribute[token][parts[i]];
-                return;
-            }else{
-                continue;
-            }
-        }
+        require(position < storedParts[token].length, "Position not valid");
+        _transfer(address(this), msg.sender, storedParts[token][position]);
+        storedParts[token][position] = storedParts[token][storedParts[token].length - 1];
+        storedParts[token].pop();
     }
 
     function getAttributes(uint256 tokenId) public view returns (string[] memory){
         require(_exists(tokenId), "Token does not exist");
-        string[] memory result = new string[](tokenAttributes[tokenId].length);
-        for(uint256 i = 0; i < tokenAttributes[tokenId].length; i++){
-            result[i] = string(abi.encodePacked(tokenAttributes[tokenId][i].name,":", tokenAttributes[tokenId][i].value));
+        string[] memory result = new string[](storedParts[tokenId].length);
+        uint[] memory parts = storedParts[tokenId];
+        for(uint256 i = 0; i < parts.length; i++){
+            result[i] = string(abi.encodePacked(tokenMajorAttribute[parts[i]].name,":", tokenMajorAttribute[parts[i]].value));
         }
         return result;
     }
