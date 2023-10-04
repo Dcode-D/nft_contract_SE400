@@ -1,5 +1,6 @@
-const {ethers} = require("hardhat")
+const {ethers, waffle} = require("hardhat")
 const {BigNumber} = require("ethers")
+const provider = waffle.provider
 
 const {
     time,
@@ -31,7 +32,6 @@ describe("complex value splitter", function () {
         for (let i = 0; i < parent.length; i++){
             let sharevalue = await license.getShareValue(id,parent[i]);
             let totalvalue = await license.getTotalValue(parent[i]);
-            console.log(id +'to' + parent[i],sharevalue.toString(),totalvalue.toString());
             sum += sharevalue*(await calculatePercent(license,parent[i]))/(totalvalue);
         }
         return sum;
@@ -98,6 +98,15 @@ describe("complex value splitter", function () {
             console.log(await license.getAllDescendants(1));
             await license.connect(owner).merge([8,7]);
             expect(await license.ownerOf(1)).to.equal(owner.address);
+        })
+        it("Should split and then calculate percentages", async function () {
+            const {license, owner} = await loadFixture(deployContract);
+            await license.mint(owner.address, "https://ipfs.io/");
+            await license.connect(owner).split(1,[1,1,1,1,1]);
+            await license.connect(owner).split(2,[1,1]);
+            await license.connect(owner).split(3,[1,1]);
+            await license.connect(owner).mergePercentage([7,8,5]);
+            expect(await calculatePercent(license,11)).to.equal(0.4);
         })
     })
 })
