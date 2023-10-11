@@ -22,7 +22,7 @@ async function mintNFT() {
         nonce: nonce,
         gas: 500000,
         data: nftContract.methods.mint(OTHER_ADDRESS, "https://www.mytokenlocation.com").encodeABI(),
-        value: web3.utils.toWei("0.1", "ether"),
+        value: web3.utils.toWei("0.15", "ether"),
     }
     const signPromise = web3.eth.accounts.signTransaction(tx, OTHER_PRIVATE_KEY)
     signPromise
